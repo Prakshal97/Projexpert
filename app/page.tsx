@@ -42,7 +42,7 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-accent/5 to-background"></div>
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center max-w-4xl mx-auto">
-            <Badge className="mb-6 bg-accent/10 text-accent-foreground border-accent/20">
+            <Badge className="mb-6 bg-accent/10 text-balance-400 border-accent/20">
               🚀 The Future of Career Preparation
             </Badge>
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-balance mb-6">
