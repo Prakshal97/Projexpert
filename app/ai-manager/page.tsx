@@ -14,6 +14,7 @@ import {
   Send, Calendar, Target, Lightbulb, TrendingUp, Loader2, Code,
 } from "lucide-react"
 import Link from "next/link"
+import { INTERNSHIP_TASKS } from "@/lib/data/tasks"
 
 interface Task {
   _id: string
@@ -84,11 +85,21 @@ export default function AIManagerPage() {
     async function loadTasks() {
       setTasksLoading(true)
       try {
-        const res = await fetch("/api/ai/tasks")
-        if (res.ok) {
-          const data = await res.json()
-          setTasks(data.tasks || [])
-        }
+        const completedIdsStr = localStorage.getItem("completed_tasks") || "[]"
+        const completedIds = JSON.parse(completedIdsStr)
+        
+        const mappedTasks = INTERNSHIP_TASKS.map(t => ({
+          _id: t.id,
+          title: t.title,
+          description: t.description,
+          priority: "medium" as const,
+          status: completedIds.includes(t.id) ? "completed" as const : t.status === "in-progress" ? "in-progress" as const : "pending" as const,
+          dueDate: "End of Week",
+          estimatedTime: "2 Hours",
+          skills: ["HTML", "CSS", "JS"],
+          difficulty: 3
+        }))
+        setTasks(mappedTasks)
       } catch (err) {
         console.error(err)
       } finally {
@@ -166,11 +177,12 @@ export default function AIManagerPage() {
     }
 
     try {
-      await fetch("/api/ai/tasks", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId, status }),
-      })
+      const completedIdsStr = localStorage.getItem("completed_tasks") || "[]"
+      let completedIds = JSON.parse(completedIdsStr)
+      if (status === "completed" && !completedIds.includes(taskId)) {
+        completedIds.push(taskId)
+        localStorage.setItem("completed_tasks", JSON.stringify(completedIds))
+      }
       setTasks((prev) => prev.map((t) => (t._id === taskId ? { ...t, status } : t)))
       setSelectedTask((prev) => (prev?._id === taskId ? { ...prev, status } : prev))
     } catch (err) {

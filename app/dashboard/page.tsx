@@ -10,10 +10,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Code, Clock, CheckCircle, Star, Upload, MessageSquare,
   Users, Target, Briefcase, LogOut, Loader2, ArrowRight,
-  CheckCircle2,
+  CheckCircle2, Lock, PlayCircle, Trophy
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { INTERNSHIP_TASKS } from "@/lib/data/tasks"
 
 export default function DashboardPage() {
   const { data: session } = useSession()
@@ -22,6 +23,16 @@ export default function DashboardPage() {
   const [enrolling, setEnrolling] = useState(false)
   const [stats, setStats] = useState({ totalProgress: 0, projectsCompleted: 0, skillsEarned: 0, hoursInvested: 0 })
   const [loading, setLoading] = useState(true)
+  const [completedTasks, setCompletedTasks] = useState<string[]>([])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("completed_tasks")
+      if (stored) {
+        setCompletedTasks(JSON.parse(stored))
+      }
+    }
+  }, [])
 
   useEffect(() => {
     async function loadProfile() {
@@ -140,65 +151,104 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Single Track Card */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-6">
-            {isEnrolled ? "Your Internship Track" : "Available Internship Track"}
-          </h2>
-
-          <Card className={`max-w-2xl ${isEnrolled ? "ring-2 ring-primary" : ""}`}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center">
-                    <Code className="w-8 h-8 text-white" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-2xl">Full Stack Web Development</CardTitle>
-                    <CardDescription className="text-sm mt-1">
-                      Build complete web applications from frontend to backend
-                    </CardDescription>
-                  </div>
-                </div>
-                {isEnrolled && (
-                  <Badge className="bg-green-500 text-white">
-                    <CheckCircle2 className="w-3 h-3 mr-1" />
-                    Enrolled
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-muted-foreground uppercase text-xs tracking-wider">What You'll Learn</h4>
-                  {["HTML, CSS & JavaScript", "React & Next.js", "Node.js & Express", "MongoDB & Databases", "REST APIs & Authentication", "Deployment & DevOps"].map((item) => (
-                    <div key={item} className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                      <span>{item}</span>
+        {/* Active Track Progress & Tasks */}
+        {isEnrolled ? (
+          <div className="mb-8 space-y-6">
+            <h2 className="text-2xl font-bold mb-4">Your Engineering Tasks</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {INTERNSHIP_TASKS.map((baseTask) => {
+                const isCompleted = completedTasks.includes(baseTask.id)
+                const task = {
+                  ...baseTask,
+                  status: isCompleted ? "completed" : baseTask.status,
+                  progress: isCompleted ? 100 : baseTask.progress
+                }
+                
+                return (
+                <Card key={task.id} className={`flex flex-col ${task.status === "in-progress" ? "ring-2 ring-primary border-primary" : task.status === "locked" ? "opacity-60 bg-muted/30" : ""}`}>
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <Badge variant={task.status === "completed" ? "default" : task.status === "in-progress" ? "secondary" : "outline"} className={task.status === "completed" ? "bg-green-500 hover:bg-green-600 text-white" : ""}>
+                        {task.status === "locked" ? <Lock className="w-3 h-3 mr-1" /> : task.status === "completed" ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <PlayCircle className="w-3 h-3 mr-1" />}
+                        {task.status === "completed" ? "Done" : task.status === "in-progress" ? "In Progress" : task.status === "available" ? "Available" : "Locked"}
+                      </Badge>
                     </div>
-                  ))}
+                    <CardTitle className="text-lg mt-2">{task.title}</CardTitle>
+                    <CardDescription className="line-clamp-2">{task.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-1">
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                      <span>Progress</span>
+                      <span>{task.progress}%</span>
+                    </div>
+                    <Progress value={task.progress} className="h-1.5 shadow-none bg-border/50" />
+                  </CardContent>
+                  <div className="p-4 pt-0 mt-auto">
+                    {task.status !== "locked" ? (
+                      <Link href={`/ide?taskId=${task.id}`}>
+                        <Button className="w-full" variant={task.status === "completed" ? "outline" : "default"}>
+                          {task.status === "completed" ? "Review Code" : "Open in IDE"}
+                          <ArrowRight className="w-4 h-4 ml-2" />
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Button className="w-full" variant="secondary" disabled>Locked</Button>
+                    )}
+                  </div>
+                </Card>
+              )})}
+            </div>
+          </div>
+        ) : (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold mb-6">Available Internship Track</h2>
+
+            <Card className="max-w-2xl">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center">
+                      <Code className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-2xl">Full Stack Web Development</CardTitle>
+                      <CardDescription className="text-sm mt-1">
+                        Build complete web applications from frontend to backend
+                      </CardDescription>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-muted-foreground uppercase text-xs tracking-wider">Details</h4>
-                  <div className="space-y-3">
-                    {[
-                      { label: "Duration", value: "8 Weeks" },
-                      { label: "Projects", value: "12 Real Projects" },
-                      { label: "AI Mentor", value: "Alex (AI Manager)" },
-                      { label: "IDE", value: "Built-in Code Editor" },
-                      { label: "Certificate", value: "On Completion" },
-                    ].map((d) => (
-                      <div key={d.label} className="flex justify-between">
-                        <span className="text-muted-foreground">{d.label}</span>
-                        <span className="font-medium">{d.value}</span>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-muted-foreground uppercase text-xs tracking-wider">What You'll Learn</h4>
+                    {["HTML, CSS & JavaScript", "React & Next.js", "Node.js & Express", "MongoDB & Databases", "REST APIs & Authentication", "Deployment & DevOps"].map((item) => (
+                      <div key={item} className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                        <span>{item}</span>
                       </div>
                     ))}
                   </div>
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-muted-foreground uppercase text-xs tracking-wider">Details</h4>
+                    <div className="space-y-3">
+                      {[
+                        { label: "Duration", value: "8 Weeks" },
+                        { label: "Projects", value: "12 Real Projects" },
+                        { label: "AI Mentor", value: "Alex (AI Manager)" },
+                        { label: "IDE", value: "Built-in Code Editor" },
+                        { label: "Certificate", value: "On Completion" },
+                      ].map((d) => (
+                        <div key={d.label} className="flex justify-between">
+                          <span className="text-muted-foreground">{d.label}</span>
+                          <span className="font-medium">{d.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              {!isEnrolled ? (
                 <Button
                   size="lg"
                   className="w-full text-base"
@@ -217,29 +267,14 @@ export default function DashboardPage() {
                     </>
                   )}
                 </Button>
-              ) : (
-                <div className="flex gap-3">
-                  <Link href="/ai-manager" className="flex-1">
-                    <Button size="lg" className="w-full">
-                      <MessageSquare className="w-5 h-5 mr-2" />
-                      Continue with AI Manager
-                    </Button>
-                  </Link>
-                  <Link href="/workspace" className="flex-1">
-                    <Button size="lg" variant="outline" className="w-full bg-transparent">
-                      <Briefcase className="w-5 h-5 mr-2" />
-                      My Workspace
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Quick Actions (only when enrolled) */}
         {isEnrolled && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -287,6 +322,23 @@ export default function DashboardPage() {
                 <Link href="/file-review">
                   <Button variant="outline" className="w-full bg-transparent">
                     Upload & Get Feedback
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Trophy className="w-5 h-5 mr-2 text-yellow-500" />
+                  Achievements
+                </CardTitle>
+                <CardDescription>View your badges, skills, and hard-earned certificates</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href="/achievements">
+                  <Button variant="outline" className="w-full bg-transparent">
+                    View Portfolio
                   </Button>
                 </Link>
               </CardContent>

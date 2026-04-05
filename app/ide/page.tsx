@@ -7,10 +7,13 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  Code, Save, Upload, ArrowLeft, Trash2, File, X, CheckCircle, Loader2, Play, TerminalSquare, LayoutDashboard, ChevronRight, ChevronDown, FolderClosed, FolderOpen, Plus, Brain, Send
+  Code, Save, Upload, ArrowLeft, Trash2, File, X, CheckCircle, Loader2, Play, TerminalSquare, LayoutDashboard, ChevronRight, ChevronDown, FolderClosed, FolderOpen, Plus, Brain, Send, BookOpen, AlertTriangle, Lightbulb, TrendingUp
 } from "lucide-react"
 import Link from "next/link"
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels"
+import { Suspense } from "react"
+import { useSearchParams } from "next/navigation"
+import { INTERNSHIP_TASKS } from "@/lib/data/tasks"
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false })
 
@@ -111,8 +114,24 @@ const LANG_MAP: Record<string, string> = {
   md: "markdown"
 }
 
-export default function IDEPage() {
+function IDEContent() {
+  const searchParams = useSearchParams()
+  const taskId = searchParams.get("taskId")
+  const taskData = taskId ? INTERNSHIP_TASKS.find(t => t.id === taskId) : null
+
   const [files, setFiles] = useState<EditorFile[]>(() => {
+    if (taskData && taskData.starterFiles && taskData.starterFiles.length > 0) {
+      if (typeof window !== "undefined" && !localStorage.getItem(`task_loaded_${taskId}`)) {
+         localStorage.setItem(`task_loaded_${taskId}`, "true");
+         return taskData.starterFiles.map((sf, i) => ({
+          id: `sf-${i}`,
+          name: sf.name,
+          content: sf.content,
+          language: sf.language,
+          saved: true
+        }))
+      }
+    }
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("ide_files")
       if (saved) return JSON.parse(saved)
@@ -127,14 +146,17 @@ export default function IDEPage() {
   const [submitting, setSubmitting] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState<Set<string>>(new Set())
   
+  // Review Result State
+  const [reviewResult, setReviewResult] = useState<{ score: number, quality: string, readability: string, mistakes: string[], suggestions: string[] } | null>(null)
+
   // Folders UI state
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src', 'src/styles', 'src/js']))
   const [newFilePath, setNewFilePath] = useState("")
   const [showNewFile, setShowNewFile] = useState(false)
   
   // Right Panel State
-  const [showRightPanel, setShowRightPanel] = useState(false)
-  const [rightPanelTab, setRightPanelTab] = useState<"preview" | "chat">("preview")
+  const [showRightPanel, setShowRightPanel] = useState(!!taskData)
+  const [rightPanelTab, setRightPanelTab] = useState<"preview" | "chat" | "instructions">(taskData ? "instructions" : "preview")
   const [previewKey, setPreviewKey] = useState(0) // Used to force reload iframe
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
@@ -261,6 +283,16 @@ export default function IDEPage() {
     const file = files.find((f) => f.id === fileId)
     if (!file) return
 
+    // Quick validation: Check if code was actually modified from starter files
+    const originalFile = taskData 
+      ? taskData.starterFiles?.find(sf => sf.name === file.name || sf.name.includes(file.name))
+      : STARTER_FILES.find(sf => sf.name === file.name || sf.name.includes(file.name))
+
+    if (originalFile && originalFile.content.trim() === file.content.trim()) {
+      setLogs(prev => [...prev, { id: Date.now().toString(), text: `[Validation Failed] You haven't made any changes to ${file.name}! Please write some code before submitting.`, type: 'error' }])
+      return
+    }
+
     setSubmitting(fileId)
     setLogs(prev => [...prev, { id: Date.now().toString(), text: `[AI Agent] Analyzing ${file.name} for code quality...`, type: 'info' }])
     
@@ -272,7 +304,18 @@ export default function IDEPage() {
       const res = await fetch("/api/files/upload", { method: "POST", body: formData })
       if (res.ok) {
         setSubmitted((prev) => new Set([...prev, fileId]))
-        setLogs(prev => [...prev, { id: Date.now().toString(), text: `[AI Agent] Success! ${file.name} submitted for review. View the File Review panel to see results.`, type: 'success' }])
+        setLogs(prev => [...prev, { id: Date.now().toString(), text: `[AI Agent] Success! ${file.name} submitted for review.`, type: 'success' }])
+        
+        // Mocking an AI Review Response immediately after successful simulated upload
+        setTimeout(() => {
+          setReviewResult({
+            score: 85,
+            quality: "Good structure, but could use some DOM optimization.",
+            readability: "Variable names are clear, but lack inline comments.",
+            mistakes: ["Using hardcoded style values instead of classes", "Missing error handling for empty states"],
+            suggestions: ["Extract the color generation to a helper function", "Use CSS classes for styling adjustments instead of inline styles"]
+          })
+        }, 1200)
       } else {
         setLogs(prev => [...prev, { id: Date.now().toString(), text: `[AI Agent] Upload failed for ${file.name}.`, type: 'error' }])
       }
@@ -686,6 +729,14 @@ export default function IDEPage() {
               <Panel defaultSize={30} minSize={20} className="bg-[#0d1117] flex flex-col border-l border-[#30363d] w-full">
                 <div className="h-10 bg-[#161b22] border-b border-[#30363d] flex items-center px-2 justify-between shrink-0 overflow-x-auto overflow-y-hidden">
                   <div className="flex items-center h-full">
+                    {taskData && (
+                      <button
+                        className={`h-full px-4 flex items-center text-xs font-semibold uppercase tracking-wider border-b-[3px] transition-colors ${rightPanelTab === 'instructions' ? 'border-blue-400 text-blue-400 bg-[#0d1117]' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                        onClick={() => setRightPanelTab('instructions')}
+                      >
+                        <BookOpen className="w-3.5 h-3.5 mr-1.5" /> Instructions
+                      </button>
+                    )}
                     <button
                       className={`h-full px-4 flex items-center text-xs font-semibold uppercase tracking-wider border-b-[3px] transition-colors ${rightPanelTab === 'preview' ? 'border-amber-400 text-amber-400 bg-[#0d1117]' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
                       onClick={() => setRightPanelTab('preview')}
@@ -714,6 +765,29 @@ export default function IDEPage() {
                       srcDoc={getPreviewHtml()}
                       className="absolute inset-0 w-full h-full border-0 bg-white"
                     />
+                  ) : rightPanelTab === 'instructions' ? (
+                    <div className="absolute inset-0 p-6 text-gray-300 overflow-y-auto">
+                      <div className="max-w-2xl mx-auto space-y-6">
+                        <div>
+                          <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 mb-3">Task Details</Badge>
+                          <h2 className="text-2xl font-bold text-white mb-2">{taskData?.title}</h2>
+                          <p className="text-gray-400 leading-relaxed bg-[#161b22] border border-[#30363d] p-4 rounded-lg">
+                            {taskData?.description}
+                          </p>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-white mb-3 flex items-center border-b border-[#30363d] pb-2">
+                            <BookOpen className="w-4 h-4 mr-2" />
+                            Instructions
+                          </h3>
+                          <div className="space-y-3">
+                            {taskData?.instructions.split('\n').filter(Boolean).map((line, i) => (
+                              <p key={i} className="text-[14px] leading-relaxed text-gray-300">{line}</p>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
                     <div className="absolute inset-0 flex flex-col w-full h-full">
                       <ScrollArea className="flex-1 p-4 w-full h-full">
@@ -782,6 +856,112 @@ export default function IDEPage() {
 
         </PanelGroup>
       </div>
+
+      {/* AI Review Result Overlay Modal */}
+      {reviewResult && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0d1117] border border-[#30363d] rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between p-4 border-b border-[#30363d] bg-[#161b22]">
+              <div className="flex items-center space-x-2">
+                <Brain className="w-5 h-5 text-purple-400" />
+                <h3 className="font-bold text-white tracking-wide">AI Senior Developer Review</h3>
+              </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-white" onClick={() => setReviewResult(null)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <ScrollArea className="flex-1 p-6">
+              <div className="space-y-6">
+                {/* Score Section */}
+                <div className="flex items-center justify-center flex-col p-6 bg-[#161b22] rounded-xl border border-[#30363d]">
+                  <div className="relative w-24 h-24 mb-3 flex items-center justify-center rounded-full border-4 border-green-500/30 bg-green-500/10">
+                    <span className="text-3xl font-black text-green-400">{reviewResult.score}</span>
+                  </div>
+                  <h4 className="text-xl font-bold text-white">Code Passed</h4>
+                  <p className="text-sm text-gray-400 text-center max-w-sm mt-2">Your implementation meets the core requirements. See detailed feedback below.</p>
+                </div>
+
+                {/* Feedback Section */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-[#161b22] border border-[#30363d] p-4 rounded-xl">
+                    <h5 className="font-semibold text-white mb-2 flex items-center text-sm">
+                      <TrendingUp className="w-4 h-4 mr-2 text-blue-400" /> Code Quality
+                    </h5>
+                    <p className="text-sm text-gray-400 leading-relaxed">{reviewResult.quality}</p>
+                  </div>
+                  <div className="bg-[#161b22] border border-[#30363d] p-4 rounded-xl">
+                    <h5 className="font-semibold text-white mb-2 flex items-center text-sm">
+                      <File className="w-4 h-4 mr-2 text-orange-400" /> Readability
+                    </h5>
+                    <p className="text-sm text-gray-400 leading-relaxed">{reviewResult.readability}</p>
+                  </div>
+                </div>
+
+                {/* Mistakes Section */}
+                <div className="space-y-3">
+                  <h5 className="font-semibold text-white flex items-center text-sm border-b border-[#30363d] pb-2">
+                    <AlertTriangle className="w-4 h-4 mr-2 text-red-400" /> Areas for Improvement
+                  </h5>
+                  <ul className="space-y-2">
+                    {reviewResult.mistakes.map((mistake, i) => (
+                      <li key={i} className="flex items-start text-sm text-gray-300">
+                        <span className="text-red-400 mr-2 mt-0.5">•</span> {mistake}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Suggestions Section */}
+                <div className="space-y-3">
+                  <h5 className="font-semibold text-white flex items-center text-sm border-b border-[#30363d] pb-2">
+                    <Lightbulb className="w-4 h-4 mr-2 text-yellow-400" /> Senior Dev Suggestions
+                  </h5>
+                  <ul className="space-y-2">
+                    {reviewResult.suggestions.map((suggestion, i) => (
+                      <li key={i} className="flex items-start text-sm text-gray-300">
+                        <span className="text-yellow-400 mr-2 mt-0.5">✦</span> {suggestion}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </ScrollArea>
+            
+            <div className="p-4 border-t border-[#30363d] bg-[#161b22] flex justify-end gap-3 shrink-0">
+              <Button variant="outline" className="border-[#30363d] text-gray-300 hover:text-white" onClick={() => setReviewResult(null)}>
+                Continue Editing
+              </Button>
+              <Link
+                href={`/certificate?name=Intern&project=${taskData?.title ? encodeURIComponent(taskData.title) : 'Web+Development+Task'}&score=${reviewResult.score}`}
+                onClick={() => {
+                  if (taskData) {
+                    const completedIdsStr = localStorage.getItem("completed_tasks") || "[]"
+                    const completedIds = JSON.parse(completedIdsStr)
+                    if (!completedIds.includes(taskData.id)) {
+                      completedIds.push(taskData.id)
+                      localStorage.setItem("completed_tasks", JSON.stringify(completedIds))
+                    }
+                  }
+                }}
+              >
+                <Button className="bg-green-600 hover:bg-green-700 text-white">
+                  Mark as Completed
+                  <CheckCircle className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+export default function IDEPage() {
+  return (
+    <Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-[#0d1117]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}>
+      <IDEContent />
+    </Suspense>
   )
 }
