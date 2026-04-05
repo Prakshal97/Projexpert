@@ -1,41 +1,80 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
+import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Briefcase, ArrowLeft } from "lucide-react"
+import { Briefcase, ArrowLeft, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
   const router = useRouter()
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
+    setError("")
+    const form = new FormData(e.currentTarget)
+    const email = form.get("email") as string
+    const password = form.get("password") as string
 
-    // Simulate login process
-    setTimeout(() => {
+    const res = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    })
+
+    if (res?.error) {
+      setError("Invalid email or password. Please try again.")
       setIsLoading(false)
+    } else {
       router.push("/dashboard")
-    }, 2000)
+    }
   }
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
+    setError("")
+    const form = new FormData(e.currentTarget)
+    const firstName = form.get("firstName") as string
+    const lastName = form.get("lastName") as string
+    const email = form.get("email") as string
+    const password = form.get("password") as string
 
-    // Simulate signup process
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName, lastName, email, password }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || "Signup failed")
+        setIsLoading(false)
+        return
+      }
+
+      // Auto-login after signup
+      const loginRes = await signIn("credentials", { email, password, redirect: false })
+      if (loginRes?.error) {
+        setError("Account created! Please sign in.")
+        setIsLoading(false)
+      } else {
+        router.push("/dashboard")
+      }
+    } catch {
+      setError("Something went wrong. Please try again.")
       setIsLoading(false)
-      router.push("/dashboard")
-    }, 2000)
+    }
   }
 
   return (
@@ -58,7 +97,14 @@ export default function LoginPage() {
           <span className="text-2xl font-bold">ProjExpert</span>
         </div>
 
-        <Tabs defaultValue="login" className="w-full">
+        {error && (
+          <div className="mb-4 flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <Tabs defaultValue="login" className="w-full" onValueChange={() => setError("")}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Sign In</TabsTrigger>
             <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -74,21 +120,16 @@ export default function LoginPage() {
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" placeholder="Enter your email" required />
+                    <Input id="email" name="email" type="email" placeholder="Enter your email" required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password">Password</Label>
-                    <Input id="password" type="password" placeholder="Enter your password" required />
+                    <Input id="password" name="password" type="password" placeholder="Enter your password" required />
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Signing In..." : "Sign In"}
                   </Button>
                 </form>
-                <div className="mt-4 text-center">
-                  <a href="#" className="text-sm text-muted-foreground hover:text-foreground">
-                    Forgot your password?
-                  </a>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -104,20 +145,26 @@ export default function LoginPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">First Name</Label>
-                      <Input id="firstName" placeholder="John" required />
+                      <Input id="firstName" name="firstName" placeholder="John" required />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="lastName">Last Name</Label>
-                      <Input id="lastName" placeholder="Doe" required />
+                      <Input id="lastName" name="lastName" placeholder="Doe" required />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signupEmail">Email</Label>
-                    <Input id="signupEmail" type="email" placeholder="Enter your email" required />
+                    <Input id="signupEmail" name="email" type="email" placeholder="Enter your email" required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signupPassword">Password</Label>
-                    <Input id="signupPassword" type="password" placeholder="Create a password" required />
+                    <Input
+                      id="signupPassword"
+                      name="password"
+                      type="password"
+                      placeholder="Create a password (min 6 chars)"
+                      required
+                    />
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Creating Account..." : "Create Account"}
