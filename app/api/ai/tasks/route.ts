@@ -7,6 +7,8 @@ import Task from "@/lib/models/Task"
 import User from "@/lib/models/User"
 
 /** GET /api/ai/tasks - get tasks; auto-generate via Gemini if user has none */
+export const dynamic = "force-dynamic"
+
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

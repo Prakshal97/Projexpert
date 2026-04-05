@@ -8,6 +8,8 @@ import User from "@/lib/models/User"
 import FileModel from "@/lib/models/File"
 
 /** GET /api/achievements - computed achievements from user data */
+export const dynamic = "force-dynamic"
+
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
